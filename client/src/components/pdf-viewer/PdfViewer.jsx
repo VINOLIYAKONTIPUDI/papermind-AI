@@ -7,6 +7,12 @@ export default function PdfViewer({ paper, chunks, activePage, setActivePage, on
   const [highlightColor, setHighlightColor] = useState('bg-yellow-500/30');
   const [searchQuery, setSearchQuery] = useState('');
 
+  const isSectionInvalid = (name) => {
+    if (!name) return true;
+    const n = name.trim().toLowerCase();
+    return n === 'general' || n === 'unknown' || n === '';
+  };
+
   const handleMouseUp = (e) => {
     const text = window.getSelection().toString().trim();
     if (text.length > 3) {
@@ -106,7 +112,11 @@ export default function PdfViewer({ paper, chunks, activePage, setActivePage, on
               {pageChunks.map((chunk, idx) => (
                 <div key={chunk.id || idx} className="space-y-2">
                   <div className="flex items-center justify-between text-xs font-semibold text-violet-400 font-heading border-b border-zinc-800/50 pb-1">
-                    <span>{chunk.section_name || `Section Page ${chunk.page_number}`}</span>
+                    {!isSectionInvalid(chunk.section_name) ? (
+                      <span>{chunk.section_name}</span>
+                    ) : (
+                      <span />
+                    )}
                     <span className="text-[10px] text-zinc-500 font-mono">Page {chunk.page_number} • Chunk #{chunk.chunk_index ?? idx}</span>
                   </div>
                   <p className="text-sm text-zinc-200 bg-zinc-950/40 p-4 rounded-xl border border-zinc-800/60 leading-relaxed">

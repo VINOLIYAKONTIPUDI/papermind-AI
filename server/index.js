@@ -3,10 +3,18 @@ const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
 const dotenv = require('dotenv');
-const { connectDB } = require('./config/db');
-const apiRoutes = require('./routes/api');
 
-dotenv.config();
+// Load environment variables with explicit resolved path
+dotenv.config({ path: path.resolve(__dirname, '.env') });
+
+console.log(`=========================================`);
+console.log(`GEMINI_API_KEY configured: ${!!process.env.GEMINI_API_KEY}`);
+console.log(`=========================================`);
+
+const { connectDB } = require('./config/db');
+const mongoose = require('mongoose');
+const vectorStore = require('./rag/retrieval/vectorStore');
+const apiRoutes = require('./routes/api');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -41,9 +49,26 @@ app.get('/', (req, res) => {
 // Mount REST API
 app.use('/api/v1', apiRoutes);
 
-// Health check endpoint
-app.get('/health', (req, res) => {
-  res.json({ status: 'ok', server: 'PaperMind AI Express Server', timestamp: new Date() });
+// Health check endpoint with dependency status
+app.get('/health', async (req, res) => {
+  const isQdrantHealthy = await vectorStore.checkHealth();
+  const dbState = mongoose.connection.readyState;
+  let databaseStatus = 'offline';
+  if (dbState === 1) databaseStatus = 'connected';
+  else if (dbState === 2) databaseStatus = 'connecting';
+  else databaseStatus = 'offline (operating in-memory mode)';
+
+  res.json({
+    status: 'ok',
+    server: 'PaperMind AI Express Server',
+    timestamp: new Date(),
+    dependencies: {
+      api: 'healthy',
+      database: databaseStatus,
+      qdrant: isQdrantHealthy ? 'connected' : 'offline (operating in fallback mode)',
+      gemini_configuration: (process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== 'your_gemini_api_key_here') ? 'configured' : 'missing (offline demonstration fallback active)'
+    }
+  });
 });
 
 // Connect DB & Start Server

@@ -12,7 +12,30 @@ const storage = multer.diskStorage({
     cb(null, Date.now() + '-' + file.originalname.replace(/\s+/g, '_'));
   }
 });
-const upload = multer({ storage });
+
+const upload = multer({
+  storage,
+  limits: {
+    fileSize: 10 * 1024 * 1024 // 10 MB limit
+  },
+  fileFilter: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (ext !== '.pdf' || file.mimetype !== 'application/pdf') {
+      return cb(new Error('Only PDF files are allowed.'), false);
+    }
+    cb(null, true);
+  }
+});
+
+// Wrapper to handle Multer upload errors gracefully
+const uploadSingle = (req, res, next) => {
+  upload.single('file')(req, res, (err) => {
+    if (err) {
+      return res.status(400).json({ error: err.message });
+    }
+    next();
+  });
+};
 
 const paperController = require('../controllers/paperController');
 const tutorController = require('../controllers/tutorController');
@@ -23,7 +46,7 @@ const reviewerController = require('../controllers/reviewerController');
 // Papers API
 router.get('/papers', paperController.getPapers);
 router.get('/papers/:id', paperController.getPaperById);
-router.post('/papers/upload', upload.single('file'), paperController.uploadPaper);
+router.post('/papers/upload', uploadSingle, paperController.uploadPaper);
 
 // AI Tutor RAG API
 router.post('/tutor/chat', tutorController.queryTutor);

@@ -3,6 +3,9 @@ const path = require('path');
 const pdfParse = require('pdf-parse');
 const { v4: uuidv4 } = require('uuid');
 const { memoryStore } = require('../config/db');
+const mongoose = require('mongoose');
+const { Paper, PaperChunk } = require('../models/Schemas');
+const ragPipeline = require('../rag/pipeline/ragPipeline');
 
 // Seed default demo papers so platform is fully rich upon launch
 const defaultPapers = [
@@ -123,6 +126,11 @@ memoryStore.chunks = [
 
 exports.getPapers = async (req, res) => {
   try {
+    const isDbConnected = mongoose.connection.readyState === 1;
+    if (isDbConnected) {
+      const papers = await Paper.find().sort({ created_at: -1 });
+      return res.json({ success: true, papers });
+    }
     return res.json({ success: true, papers: memoryStore.papers });
   } catch (err) {
     return res.status(500).json({ error: err.message });
@@ -131,6 +139,14 @@ exports.getPapers = async (req, res) => {
 
 exports.getPaperById = async (req, res) => {
   try {
+    const isDbConnected = mongoose.connection.readyState === 1;
+    if (isDbConnected) {
+      const paper = await Paper.findOne({ id: req.params.id });
+      if (paper) {
+        const chunks = await PaperChunk.find({ paper_id: req.params.id }).sort({ chunk_index: 1 });
+        return res.json({ success: true, paper, chunks });
+      }
+    }
     const paper = memoryStore.papers.find(p => p.id === req.params.id);
     if (!paper) {
       return res.status(404).json({ error: 'Paper not found' });
@@ -149,10 +165,51 @@ exports.uploadPaper = async (req, res) => {
     }
 
     const dataBuffer = fs.readFileSync(req.file.path);
-    const parsedData = await pdfParse(dataBuffer);
+    
+    // Page-by-page text parsing option
+    const pageData = [];
+    const renderPage = (pageDataObj) => {
+      return pageDataObj.getTextContent().then(textContent => {
+        const pageText = textContent.items.map(item => item.str).join(' ');
+        pageData.push({
+          page: pageDataObj.pageIndex + 1,
+          text: pageText
+        });
+        return pageText;
+      });
+    };
 
-    const title = parsedData.info?.Title || req.file.originalname.replace('.pdf', '');
+    let parsedData;
+    try {
+      parsedData = await pdfParse(dataBuffer, { pagerender: renderPage });
+    } catch (parseError) {
+      return res.status(400).json({
+        error: 'Failed to process PDF structure. It may be corrupt, password-protected, or invalid.'
+      });
+    }
+
+    if (!parsedData || !parsedData.text || parsedData.text.trim().length === 0) {
+      return res.status(400).json({
+        error: 'The uploaded PDF does not contain extractable text. Scanned image documents are not supported.'
+      });
+    }
+
+    const title = parsedData.info?.Title || req.file.originalname.replace('.pdf', '').replace(/_/g, ' ');
     const authorStr = parsedData.info?.Author || 'Academic Researcher';
+
+    // Duplicate detection
+    const isDbConnected = mongoose.connection.readyState === 1;
+    let isDuplicate = false;
+    if (isDbConnected) {
+      const existingPaper = await Paper.findOne({ title: { $regex: new RegExp(`^${title}$`, 'i') } });
+      if (existingPaper) isDuplicate = true;
+    } else {
+      isDuplicate = memoryStore.papers.some(p => p.title.toLowerCase() === title.toLowerCase());
+    }
+
+    if (isDuplicate) {
+      return res.status(400).json({ error: 'A research paper with this title has already been uploaded.' });
+    }
 
     const newPaper = {
       id: `paper-${uuidv4().substring(0, 8)}`,
@@ -160,7 +217,7 @@ exports.uploadPaper = async (req, res) => {
       authors: authorStr.split(',').map(a => a.trim()),
       journal: 'Submitted PDF Document',
       doi: `10.1016/papermind.${Math.floor(Math.random() * 899999 + 100000)}`,
-      publication_year: 2024,
+      publication_year: new Date().getFullYear(),
       pdf_url: `/uploads/${req.file.filename}`,
       summary: parsedData.text.substring(0, 350).replace(/\n/g, ' ') + '...',
       domain_tag: 'Scientific Research',
@@ -175,24 +232,30 @@ exports.uploadPaper = async (req, res) => {
       created_at: new Date()
     };
 
-    // Generate section chunks
-    const paragraphs = parsedData.text.split('\n\n');
-    let chunkIndex = 0;
-    paragraphs.forEach((p, idx) => {
-      if (p.trim().length > 100) {
-        memoryStore.chunks.push({
-          id: `chunk-${uuidv4().substring(0, 8)}`,
-          paper_id: newPaper.id,
-          page_number: Math.floor(idx / 3) + 1,
-          chunk_index: chunkIndex++,
-          section_name: idx < 2 ? 'Abstract' : idx < 5 ? 'Methodology' : 'Discussion',
-          content: p.trim(),
-          bbox: { x: 50, y: 100 + (chunkIndex % 4) * 120, w: 500, h: 100 }
-        });
+    // Ingest via RAG Pipeline
+    pageData.sort((a, b) => a.page - b.page);
+    const ingestedChunks = await ragPipeline.ingestPaper(newPaper.id, pageData);
+
+    const schemaChunks = ingestedChunks.map(c => ({
+      id: c.id || `chunk-${uuidv4().substring(0, 8)}`,
+      paper_id: newPaper.id,
+      page_number: c.page_number,
+      chunk_index: c.chunk_index,
+      section_name: c.section_name,
+      content: c.content,
+      bbox: c.bbox
+    }));
+
+    if (isDbConnected) {
+      const paperDoc = new Paper(newPaper);
+      await paperDoc.save();
+      if (schemaChunks.length > 0) {
+        await PaperChunk.insertMany(schemaChunks);
       }
-    });
+    }
 
     memoryStore.papers.unshift(newPaper);
+    schemaChunks.forEach(sc => memoryStore.chunks.push(sc));
 
     return res.status(201).json({
       success: true,

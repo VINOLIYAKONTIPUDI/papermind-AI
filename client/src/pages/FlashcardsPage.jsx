@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { BrainCircuit, RotateCw } from 'lucide-react';
 import { fetchFlashcards, reviewFlashcardItem } from '../lib/api';
+import MarkdownRenderer from '../components/chat-sidebar/MarkdownRenderer';
+import Whiteboard from '../components/flashcards/Whiteboard';
 
 export default function FlashcardsPage({ paperId }) {
   const [cards, setCards] = useState([
@@ -76,7 +78,7 @@ export default function FlashcardsPage({ paperId }) {
   }, [currentIndex, isFlipped, currentCard]);
 
   return (
-    <div className="w-full min-h-screen bg-zinc-950 p-8 flex flex-col items-center justify-center max-w-4xl mx-auto space-y-8">
+    <div className="w-full min-h-screen bg-zinc-950 p-6 flex flex-col items-center justify-center max-w-6xl mx-auto space-y-6">
       {/* Header */}
       <div className="text-center space-y-2">
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-violet-950/60 border border-violet-500/40 text-violet-300 text-xs font-semibold glow-violet">
@@ -84,60 +86,120 @@ export default function FlashcardsPage({ paperId }) {
           <span>Leitner Spaced Repetition Study Arena</span>
         </div>
         <h1 className="font-heading font-extrabold text-3xl text-white">Concept Flashcards Deck</h1>
-        <p className="text-xs text-zinc-400">Use <kbd className="px-2 py-0.5 rounded bg-zinc-800 font-mono text-zinc-300">Spacebar</kbd> to flip card, and keys <kbd className="px-2 py-0.5 rounded bg-zinc-800 font-mono text-zinc-300">1</kbd>, <kbd className="px-2 py-0.5 rounded bg-zinc-800 font-mono text-zinc-300">2</kbd>, <kbd className="px-2 py-0.5 rounded bg-zinc-800 font-mono text-zinc-300">3</kbd> to rate recall difficulty.</p>
+        <p className="text-xs text-zinc-400">
+          Use <kbd className="px-2 py-0.5 rounded bg-zinc-800 font-mono text-zinc-300">Spacebar</kbd> to reveal/hide answer, and keys <kbd className="px-2 py-0.5 rounded bg-zinc-800 font-mono text-zinc-300">1</kbd>, <kbd className="px-2 py-0.5 rounded bg-zinc-800 font-mono text-zinc-300">2</kbd>, <kbd className="px-2 py-0.5 rounded bg-zinc-800 font-mono text-zinc-300">3</kbd> to rate recall.
+        </p>
       </div>
 
       {!completed && currentCard ? (
-        <div className="w-full max-w-xl space-y-6">
-          {/* Card Container */}
-          <div
-            onClick={() => setIsFlipped(!isFlipped)}
-            className="w-full h-80 rounded-3xl bg-zinc-900/90 border-2 border-violet-500/40 p-8 flex flex-col justify-between cursor-pointer glass-panel shadow-2xl transition-all duration-300 hover:scale-[1.01] glow-violet text-center relative"
-          >
-            <div className="flex items-center justify-between text-xs text-zinc-500 font-mono">
-              <span>Card {currentIndex + 1} of {cards.length}</span>
-              <span className="px-2 py-1 rounded bg-violet-600/20 text-violet-300 font-semibold border border-violet-500/30">{currentCard.concept_tag || currentCard.tag || 'Concept'}</span>
-              <span>Leitner Box #{currentCard.box_level || currentCard.box || 1}</span>
+        <div className="w-full max-w-5xl space-y-6">
+          {/* Main workspace layout */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-stretch w-full">
+            
+            {/* Flashcard (Question + Expected Answer) */}
+            <div
+              onClick={() => { if (!isFlipped) setIsFlipped(true); }}
+              className={`w-full rounded-3xl bg-zinc-900/90 border-2 border-violet-500/40 p-6 flex flex-col justify-between glass-panel shadow-2xl transition-all duration-300 glow-violet relative h-[420px] md:h-[450px] overflow-y-auto ${
+                !isFlipped ? 'cursor-pointer hover:scale-[1.01]' : ''
+              }`}
+            >
+              {/* Card Meta Header */}
+              <div className="flex items-center justify-between text-[11px] text-zinc-500 font-mono mb-4 border-b border-zinc-800/40 pb-2">
+                <span>Card {currentIndex + 1} of {cards.length}</span>
+                <span className="px-2 py-0.5 rounded bg-violet-600/20 text-violet-300 font-semibold border border-violet-500/30">
+                  {currentCard.concept_tag || currentCard.tag || 'Concept'}
+                </span>
+                <span>Box #{currentCard.box_level || currentCard.box || 1}</span>
+              </div>
+
+              {/* Core Content */}
+              <div className="flex-1 flex flex-col justify-center space-y-6 my-auto text-left">
+                {/* Question section */}
+                <div className="space-y-2">
+                  <span className="text-[10px] font-mono font-bold text-violet-400 uppercase tracking-widest block">
+                    QUESTION CONCEPT
+                  </span>
+                  <div className="font-heading font-semibold text-base text-zinc-100 leading-relaxed">
+                    <MarkdownRenderer content={currentCard.question} />
+                  </div>
+                </div>
+
+                {/* Expected Answer (Desktop only) */}
+                {isFlipped && (
+                  <div className="hidden md:block pt-4 border-t border-zinc-800/80 space-y-2 animate-in fade-in duration-300">
+                    <span className="text-[10px] font-mono font-bold text-emerald-400 uppercase tracking-widest block">
+                      EXPECTED ANSWER
+                    </span>
+                    <div className="text-zinc-200 text-sm leading-relaxed">
+                      <MarkdownRenderer content={currentCard.answer} />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Reveal hint at bottom */}
+              {!isFlipped && (
+                <div className="text-[11px] text-zinc-500 font-mono flex items-center justify-center gap-2 mt-4 pt-2 border-t border-zinc-800/40">
+                  <RotateCw className="w-3.5 h-3.5" />
+                  <span>Click Card or Press Spacebar to Reveal</span>
+                </div>
+              )}
             </div>
 
-            <div className="my-auto space-y-4">
-              <div className="text-xs font-mono text-violet-400 font-bold uppercase tracking-wider">
-                {isFlipped ? 'ANSWER REVEAL' : 'QUESTION CONCEPT'}
-              </div>
-              <div className="font-heading font-bold text-lg text-zinc-100 leading-relaxed px-4">
-                {isFlipped ? currentCard.answer : currentCard.question}
+            {/* Whiteboard Workspace */}
+            <div className="w-full rounded-3xl bg-zinc-900/90 border-2 border-violet-500/40 p-6 flex flex-col justify-between glass-panel shadow-2xl transition-all duration-300 h-[420px] md:h-[450px]">
+              <div className="flex-1 h-full">
+                <Whiteboard activeCardId={currentCard.id} />
               </div>
             </div>
 
-            <div className="text-[11px] text-zinc-500 font-mono flex items-center justify-center gap-2">
-              <RotateCw className="w-3.5 h-3.5" />
-              <span>Click or Press Spacebar to Flip Card</span>
-            </div>
           </div>
 
-          {/* Rating Buttons */}
+          {/* Expected Answer (Mobile only - placed below the whiteboard for comparison) */}
           {isFlipped && (
-            <div className="grid grid-cols-3 gap-4 animate-in fade-in duration-200">
-              <button
-                onClick={() => handleRate(1)}
-                className="py-3 rounded-xl bg-red-950/40 border border-red-500/40 text-red-300 font-semibold text-xs hover:bg-red-900/60 transition-colors"
-              >
-                [1] Forgot Card
-              </button>
-              <button
-                onClick={() => handleRate(2)}
-                className="py-3 rounded-xl bg-amber-950/40 border border-amber-500/40 text-amber-300 font-semibold text-xs hover:bg-amber-900/60 transition-colors"
-              >
-                [2] Knew Partially
-              </button>
-              <button
-                onClick={() => handleRate(3)}
-                className="py-3 rounded-xl bg-emerald-950/40 border border-emerald-500/40 text-emerald-300 font-semibold text-xs hover:bg-emerald-900/60 transition-colors shadow-lg shadow-emerald-950/50"
-              >
-                [3] Mastered!
-              </button>
+            <div className="block md:hidden w-full p-6 rounded-3xl bg-zinc-900/90 border-2 border-emerald-500/30 glass-panel shadow-xl text-left space-y-2 animate-in slide-in-from-bottom duration-200">
+              <span className="text-[10px] font-mono font-bold text-emerald-400 uppercase tracking-widest block">
+                EXPECTED ANSWER
+              </span>
+              <div className="text-zinc-200 text-sm leading-relaxed">
+                <MarkdownRenderer content={currentCard.answer} />
+              </div>
             </div>
           )}
+
+          {/* Actions & Rating Toolbar */}
+          <div className="w-full flex flex-col items-center justify-center pt-2">
+            {!isFlipped ? (
+              <button
+                onClick={() => setIsFlipped(true)}
+                className="px-8 py-3.5 rounded-2xl bg-violet-600 hover:bg-violet-500 text-white font-bold text-xs transition-all duration-200 shadow-lg shadow-violet-900/40 hover:scale-[1.02] flex items-center gap-2 cursor-pointer"
+              >
+                <RotateCw className="w-4 h-4" />
+                <span>Reveal Answer</span>
+              </button>
+            ) : (
+              <div className="w-full max-w-xl grid grid-cols-3 gap-4 animate-in fade-in duration-300">
+                <button
+                  onClick={() => handleRate(1)}
+                  className="py-3 rounded-xl bg-red-950/40 border border-red-500/40 text-red-300 font-semibold text-xs hover:bg-red-900/60 transition-colors cursor-pointer"
+                >
+                  [1] Forgot Card
+                </button>
+                <button
+                  onClick={() => handleRate(2)}
+                  className="py-3 rounded-xl bg-amber-950/40 border border-amber-500/40 text-amber-300 font-semibold text-xs hover:bg-amber-900/60 transition-colors cursor-pointer"
+                >
+                  [2] Knew Partially
+                </button>
+                <button
+                  onClick={() => handleRate(3)}
+                  className="py-3 rounded-xl bg-emerald-950/40 border border-emerald-500/40 text-emerald-300 font-semibold text-xs hover:bg-emerald-900/60 transition-colors shadow-lg shadow-emerald-950/50 cursor-pointer"
+                >
+                  [3] Mastered!
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       ) : (
         <div className="p-10 rounded-3xl bg-zinc-900/80 border border-emerald-500/50 glass-panel text-center space-y-4 glow-emerald max-w-md w-full">
@@ -148,7 +210,7 @@ export default function FlashcardsPage({ paperId }) {
           <p className="text-xs text-zinc-400">All scheduled flashcards for today have been reviewed. High retention recorded!</p>
           <button
             onClick={() => { setCurrentIndex(0); setCompleted(false); }}
-            className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition-colors shadow-lg shadow-emerald-900/40"
+            className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition-colors shadow-lg shadow-emerald-900/40 cursor-pointer"
           >
             Review Deck Again
           </button>
@@ -157,3 +219,4 @@ export default function FlashcardsPage({ paperId }) {
     </div>
   );
 }
+

@@ -1,8 +1,45 @@
-# React + Vite
+# PaperMind AI — React Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+This is the React frontend for the PaperMind AI platform, powered by Vite.
 
-Currently, two official plugins are available:
+## Setup & Running the Frontend
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+Before running the frontend, make sure the backend server is running (default port `5000`).
+
+### 1. Unified Setup (Recommended)
+You can run both the frontend and backend concurrently from the project root using:
+```bash
+# Go to root directory
+cd ..
+
+# Install all dependencies (Frontend & Backend)
+npm run install:all
+
+# Run both servers concurrently
+npm run dev
+```
+
+### 2. Standalone Frontend Development
+If you want to run the client separately:
+```bash
+# Install dependencies
+npm install
+
+# Start Vite development server
+npm run dev
+```
+The client app will be accessible at: [http://localhost:5173](http://localhost:5173)
+
+### 3. Production Build
+To build and preview the production build of the frontend:
+```bash
+# Build the production files (output in dist/)
+npm run build
+
+# Preview the build locally
+npm run preview
+```
+
+---
+
+For full details on the vector database (Qdrant), MongoDB metadata storage, and configuration, please refer to the [Root README](../README.md).
